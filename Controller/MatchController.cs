@@ -1,4 +1,4 @@
-using Crazy_Lobby.AppDbContext;
+using Crazy_Lobby.Data;
 using Crazy_Lobby.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

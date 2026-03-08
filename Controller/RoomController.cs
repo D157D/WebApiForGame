@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Mvc;
 using Crazy_Lobby.Models;
 using Sever.Models;
 using Crazy_Lobby.Services;
+using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class RoomController : ControllerBase
 {
     private readonly IRoomService _roomService;
