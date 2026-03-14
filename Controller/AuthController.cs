@@ -4,16 +4,20 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Security.Claims;
+using Crazy_Lobby.AppDataContext;
+using System.Security.Cryptography;
 
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly AppDbContext _context;
 
-    public AuthController(IHttpClientFactory httpClientFactory)
+    public AuthController(IHttpClientFactory httpClientFactory, AppDbContext context)
     {
         _httpClientFactory = httpClientFactory;
+        _context = context;
     }
 
     //Register
@@ -25,25 +29,53 @@ public class AuthController : ControllerBase
             return BadRequest("Yêu cầu không hợp lệ: Username và Password không được để trống.");
         }
         Console.WriteLine($"Register request received for User: {request.Username}");
-        return Ok(new { Message = "Đăng ký thành công!" });
+        
+        // Kiểm tra xem Username đã tồn tại chưa
+        if (_context.Users.Any(u => u.Username == request.Username))
+        {
+            return BadRequest("Tên tài khoản đã tồn tại!");
+        }
+
+        var newUser = new User
+        {
+            Username = request.Username,
+            Password = HashPassword(request.Password),
+            PlayerId = Guid.NewGuid().ToString()
+        };
+
+        _context.Users.Add(newUser);
+        _context.SaveChanges();
+
+        return Ok(new { Message = "Đăng ký thành công!", PlayerId = newUser.PlayerId });
     }
+
+    
 
     //Login
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest request)
     {
-        if (request == null || string.IsNullOrEmpty(request.Username))
+        if (request == null || string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password))
         {
-            return BadRequest("Yêu cầu không hợp lệ: Username không được để trống.");
+            return BadRequest("Yêu cầu không hợp lệ: Username và Password không được để trống.");
         }
 
         Console.WriteLine($"Login request received for User: {request.Username}");
 
-        // Tạo PlayerId một lần duy nhất để đồng bộ giữa Token và Response
-        var playerId = Guid.NewGuid().ToString();
-        var token = GenerateJWTToken(request.Username, playerId);
+        var user = _context.Users.FirstOrDefault(u => u.Username == request.Username);
 
-        return Ok(new  { Token = token, PlayerId = playerId });
+        if (user == null || user.Password != HashPassword(request.Password))
+        {
+            return Unauthorized("Tên đăng nhập hoặc mật khẩu không đúng.");
+        }
+
+        // Tạo một SessionId mới mỗi lần đăng nhập để vô hiệu hóa các token cũ
+        user.SessionId = Guid.NewGuid().ToString();
+        _context.SaveChanges();
+
+        var token = GenerateJWTToken(user.Username, user.PlayerId, user.SessionId);
+
+        return Ok(new  { Token = token, PlayerId = user.PlayerId });
     }
 
     //AddFriend
@@ -123,7 +155,7 @@ public class AuthController : ControllerBase
 
         return Ok(new { Message = $"Bạn đã xóa {request.FriendUsername} khỏi danh sách bạn bè!" });
     }
-    private string GenerateJWTToken(string username, string playerId)
+    private string GenerateJWTToken(string username, string playerId, string sessionId)
     {
         var SecretKey = "definitely-a-very-secure-secret-key";
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
@@ -132,6 +164,7 @@ public class AuthController : ControllerBase
         {
             new Claim(JwtRegisteredClaimNames.Sub, username),
             new Claim("PlayerId", playerId),
+            new Claim("SessionId", sessionId),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()) // ID độc nhất của cái token này
         };
 
@@ -144,5 +177,19 @@ public class AuthController : ControllerBase
             signingCredentials: credentials); 
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string HashPassword(string password)
+    {
+        using (var sha256 = SHA256.Create())
+        {
+            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+            var builder = new StringBuilder();
+            foreach (var b in bytes)
+            {
+                builder.Append(b.ToString("x2"));
+            }
+            return builder.ToString();
+        }
     }
 }

@@ -1,4 +1,4 @@
-namespace Sever.Models
+namespace Crazy_Lobby.Models
 {
     public class Player
     {

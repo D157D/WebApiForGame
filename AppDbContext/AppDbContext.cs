@@ -1,7 +1,7 @@
+using Crazy_Lobby.Models;
 using Microsoft.EntityFrameworkCore;
-using Sever.Models;
 
-namespace Crazy_Lobby.AppDbContext
+namespace Crazy_Lobby.AppDataContext
 {
     public class AppDbContext : DbContext
     {
@@ -9,6 +9,6 @@ namespace Crazy_Lobby.AppDbContext
         {
         }
 
-        public DbSet<MatchResult> MatchResults { get; set; }
+        public DbSet<User> Users { get; set; }
     }
 }
