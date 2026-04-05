@@ -6,6 +6,7 @@ using System.Text;
 using System.Security.Claims;
 using Crazy_Lobby.AppDataContext;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -79,6 +80,7 @@ public class AuthController : ControllerBase
     }
 
     //AddFriend
+    [Authorize]
     [HttpPost("add-friend")]
     public IActionResult AddFriend([FromBody] AddFriend request)
     {
@@ -86,12 +88,47 @@ public class AuthController : ControllerBase
         {
             return BadRequest("Yêu cầu không hợp lệ: FriendUsername không được để trống.");
         }
-        Console.WriteLine($"AddFriend request received for User: {request.FriendUsername}");
+
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        if (receiver == null) return NotFound("Người dùng không tồn tại.");
+        
+        if (receiver.PlayerId == currentPlayerId) return BadRequest("Không thể kết bạn với chính mình.");
+
+        // Kiểm tra xem đã là bạn bè chưa
+        var isAlreadyFriend = _context.Friendships.Any(f => 
+            (f.PlayerId1 == currentPlayerId && f.PlayerId2 == receiver.PlayerId) || 
+            (f.PlayerId1 == receiver.PlayerId && f.PlayerId2 == currentPlayerId));
+            
+        if (isAlreadyFriend) return BadRequest("Hai người đã là bạn bè.");
+
+        // Kiểm tra xem yêu cầu từ mình đến người kia đã tồn tại chưa
+        var existingRequest = _context.FriendRequests.FirstOrDefault(f => 
+            f.SenderId == currentPlayerId && f.ReceiverId == receiver.PlayerId && f.Status == "Pending");
+            
+        if (existingRequest != null) return BadRequest("Yêu cầu kết bạn đã được gửi trước đó.");
+
+        // Kiểm tra xem người kia có đang gửi yêu cầu cho mình không
+        var reverseRequest = _context.FriendRequests.FirstOrDefault(f => 
+            f.SenderId == receiver.PlayerId && f.ReceiverId == currentPlayerId && f.Status == "Pending");
+            
+        if (reverseRequest != null) return BadRequest("Người này đã gửi yêu cầu kết bạn cho bạn, vui lòng kiểm tra lời mời.");
+
+        _context.FriendRequests.Add(new FriendRequest 
+        { 
+            SenderId = currentPlayerId, 
+            ReceiverId = receiver.PlayerId, 
+            Status = "Pending" 
+        });
+        _context.SaveChanges();
 
         return Ok(new { Message = $"Yêu cầu kết bạn đã được gửi đến {request.FriendUsername}!" });
     }
 
     //AcceptFriend
+    [Authorize]
     [HttpPost("accept-friend")]
     public IActionResult AcceptFriend([FromBody] AddFriend request)
     {
@@ -99,13 +136,33 @@ public class AuthController : ControllerBase
         {
             return BadRequest("Yêu cầu không hợp lệ: FriendUsername không được để trống.");
         }
-        Console.WriteLine($"AcceptFriend request received for User: {request.FriendUsername}");
+
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        if (sender == null) return NotFound("Người dùng không tồn tại.");
+
+        var friendRequest = _context.FriendRequests.FirstOrDefault(f => 
+            f.SenderId == sender.PlayerId && f.ReceiverId == currentPlayerId && f.Status == "Pending");
+
+        if (friendRequest == null) return NotFound("Không tìm thấy yêu cầu kết bạn đang chờ.");
+
+        friendRequest.Status = "Accepted";
+
+        _context.Friendships.Add(new Friendship 
+        { 
+            PlayerId1 = sender.PlayerId, 
+            PlayerId2 = currentPlayerId 
+        });
+
+        _context.SaveChanges();
 
         return Ok(new { Message = $"Bạn đã chấp nhận yêu cầu kết bạn từ {request.FriendUsername}!" });
     }
 
     //RejectFriend
-
+    [Authorize]
     [HttpPost("reject-friend")]
     public IActionResult RejectFriend([FromBody] AddFriend request)
     {
@@ -113,7 +170,21 @@ public class AuthController : ControllerBase
         {
             return BadRequest("Yêu cầu không hợp lệ: FriendUsername không được để trống.");
         }
-        Console.WriteLine($"RejectFriend request received for User: {request.FriendUsername}");
+
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        if (sender == null) return NotFound("Người dùng không tồn tại.");
+
+        var friendRequest = _context.FriendRequests.FirstOrDefault(f => 
+            f.SenderId == sender.PlayerId && f.ReceiverId == currentPlayerId && f.Status == "Pending");
+
+        if (friendRequest == null) return NotFound("Không tìm thấy yêu cầu kết bạn đang chờ.");
+
+        // Từ chối thì xoá luôn bản ghi Request đó
+        _context.FriendRequests.Remove(friendRequest);
+        _context.SaveChanges();
 
         return Ok(new { Message = $"Bạn đã từ chối yêu cầu kết bạn từ {request.FriendUsername}!" });
     }
@@ -144,6 +215,7 @@ public class AuthController : ControllerBase
         return Ok(new { Message = $"Bạn đã gửi lời mời chơi đến {request.FriendUsername}!" });
     }
 
+    [Authorize]
     [HttpDelete("delete-friend")]
     public IActionResult DeleteFriend([FromBody] AddFriend request)
     {
@@ -151,7 +223,22 @@ public class AuthController : ControllerBase
         {
             return BadRequest("Yêu cầu không hợp lệ: FriendUsername không được để trống.");
         }
-        Console.WriteLine($"DeleteFriend request received for User: {request.FriendUsername}");
+
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var friend = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        if (friend == null) return NotFound("Người dùng không tồn tại.");
+
+        // Tìm Friendship không quan trọng thứ tự Player1 và Player2
+        var friendship = _context.Friendships.FirstOrDefault(f => 
+            (f.PlayerId1 == currentPlayerId && f.PlayerId2 == friend.PlayerId) || 
+            (f.PlayerId1 == friend.PlayerId && f.PlayerId2 == currentPlayerId));
+
+        if (friendship == null) return NotFound("Hai người không phải là bạn bè.");
+
+        _context.Friendships.Remove(friendship);
+        _context.SaveChanges();
 
         return Ok(new { Message = $"Bạn đã xóa {request.FriendUsername} khỏi danh sách bạn bè!" });
     }
