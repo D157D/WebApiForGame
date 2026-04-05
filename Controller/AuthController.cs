@@ -41,7 +41,8 @@ public class AuthController : ControllerBase
         {
             Username = request.Username,
             Password = HashPassword(request.Password),
-            PlayerId = Guid.NewGuid().ToString()
+            PlayerId = Guid.NewGuid().ToString(),
+            DisplayName = request.Username // Mặc định tên hiển thị = tên đăng nhập
         };
 
         _context.Users.Add(newUser);

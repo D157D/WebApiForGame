@@ -10,5 +10,6 @@ namespace Crazy_Lobby.Models
         public string Password { get; set; } = string.Empty;
         public string PlayerId { get; set; } = string.Empty;
         public string SessionId {get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty; // Tên hiển thị trong game, tách biệt với Username
     }
 }
