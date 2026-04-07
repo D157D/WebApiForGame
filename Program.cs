@@ -12,26 +12,26 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient(); 
 
-// 2. Lấy Connection String và ép cấu hình SSL/Retry
+// 2. Lấy Connection String (Sẽ ưu tiên lấy từ Biến môi trường trên Railway)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseNpgsql(connectionString, npgsqlOptions => {
-        // Tự động thử lại 5 lần nếu DB bận hoặc chưa khởi động xong
+        // Tự động thử lại nếu Database chưa sẵn sàng
         npgsqlOptions.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorCodesToAdd: null);
     }));
 
-// 3. Cấu hình CORS (Cho phép Unity truy cập)
+// 3. Cấu hình CORS cho Unity
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAll", policy => {
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     });
 });
 
-// 4. Cấu hình JWT (Giữ nguyên cấu hình của bạn)
+// 4. Cấu hình Authentication (JWT)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options => {
         options.TokenValidationParameters = new TokenValidationParameters {
@@ -47,7 +47,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 var app = builder.Build();
 
-// 5. TỰ ĐỘNG TẠO BẢNG (FIX LỖI 500)
+// 5. TỰ ĐỘNG TẠO BẢNG (FIX LỖI 500 DO THIẾU TABLE)
 using (var scope = app.Services.CreateScope()) {
     var services = scope.ServiceProvider;
     try {
@@ -59,20 +59,17 @@ using (var scope = app.Services.CreateScope()) {
     }
 }
 
-// 6. Middleware Pipeline (THỨ TỰ CỰC KỲ QUAN TRỌNG)
+// 6. Middleware Pipeline
 app.UseSwagger();
-app.UseSwaggerUI(c => {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
-    c.RoutePrefix = "swagger";
-});
+app.UseSwaggerUI();
 
-app.UseCors("AllowAll"); // Cors phải đứng trước Auth
+app.UseCors("AllowAll"); // Đặt trước Auth
 
 app.UseAuthentication(); 
 app.UseAuthorization();
 
 app.MapControllers();
 
-// 7. Chạy trên Port của Railway
+// 7. Chạy trên Port do Railway cung cấp
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 app.Run($"http://0.0.0.0:{port}");
