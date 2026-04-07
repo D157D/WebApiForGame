@@ -10,16 +10,12 @@ using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+#pragma warning disable CA1050 // Declare types in namespaces
+public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext context) : ControllerBase
+#pragma warning restore CA1050 // Declare types in namespaces
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly AppDbContext _context;
-
-    public AuthController(IHttpClientFactory httpClientFactory, AppDbContext context)
-    {
-        _httpClientFactory = httpClientFactory;
-        _context = context;
-    }
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly AppDbContext _context = context;
 
     //Register
     [HttpPost("register")]
@@ -48,7 +44,19 @@ public class AuthController : ControllerBase
         _context.Users.Add(newUser);
         _context.SaveChanges();
 
-        return Ok(new { Message = "Đăng ký thành công!", PlayerId = newUser.PlayerId });
+        // Tự động kết bạn với Crazy_Lobby (nếu có)
+        var systemUser = _context.Users.FirstOrDefault(u => u.Username == "Crazy_Lobby");
+        if (systemUser != null && systemUser.PlayerId != newUser.PlayerId)
+        {
+            _context.Friendships.Add(new Friendship 
+            { 
+                PlayerId1 = systemUser.PlayerId, 
+                PlayerId2 = newUser.PlayerId 
+            });
+            _context.SaveChanges();
+        }
+
+        return Ok(new { Message = "Đăng ký thành công!", newUser.PlayerId });
     }
 
     
@@ -77,7 +85,7 @@ public class AuthController : ControllerBase
 
         var token = GenerateJWTToken(user.Username, user.PlayerId, user.SessionId);
 
-        return Ok(new  { Token = token, PlayerId = user.PlayerId });
+        return Ok(new  { Token = token, user.PlayerId });
     }
 
     //AddFriend
@@ -189,31 +197,98 @@ public class AuthController : ControllerBase
 
         return Ok(new { Message = $"Bạn đã từ chối yêu cầu kết bạn từ {request.FriendUsername}!" });
     }
-
-    //CreateRoom
-    [HttpPost("create-room")]
-    public IActionResult CreateRoom([FromBody] CreateRoomRequest request)
+    
+    //InviteFriend
+    [Authorize]
+    [HttpPost("invite-game")]
+    public IActionResult InviteFriend([FromBody] GameInviteRequest request)
     {
-        if (request == null || string.IsNullOrEmpty(request.RoomName) || request.MaxPlayers <= 0)
+        if (request == null || string.IsNullOrEmpty(request.FriendUsername) || string.IsNullOrEmpty(request.RoomId))
         {
-            return BadRequest("Yêu cầu không hợp lệ: RoomName không được để trống và MaxPlayers phải lớn hơn 0.");
+            return BadRequest("Yêu cầu không hợp lệ: FriendUsername và RoomId không được để trống.");
         }
-        Console.WriteLine($"CreateRoom request received for Room: {request.RoomName} with MaxPlayers: {request.MaxPlayers}");
 
-        return Ok(new { Message = $"Phòng '{request.RoomName}' đã được tạo với sức chứa tối đa {request.MaxPlayers} người chơi!" });
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        if (receiver == null) return NotFound("Người dùng không tồn tại.");
+
+        if (receiver.PlayerId == currentPlayerId) return BadRequest("Không thể mời chính mình.");
+
+        // Kiểm tra xem đã là bạn bè chưa (Tùy chọn: có thể cho phép mời cả người không phải bạn)
+        var areFriends = _context.Friendships.Any(f => 
+            (f.PlayerId1 == currentPlayerId && f.PlayerId2 == receiver.PlayerId) || 
+            (f.PlayerId1 == receiver.PlayerId && f.PlayerId2 == currentPlayerId));
+            
+        if (!areFriends) return BadRequest("Bạn chỉ có thể mời bạn bè chơi cùng.");
+
+        // Xóa lời mời cũ (nếu có) đến cùng người đó cho cùng phòng để tránh spam
+        var oldInvite = _context.GameInvites.FirstOrDefault(i => 
+            i.SenderId == currentPlayerId && i.ReceiverId == receiver.PlayerId && i.RoomId == request.RoomId && i.Status == "Pending");
+        if (oldInvite != null) _context.GameInvites.Remove(oldInvite);
+
+        var invite = new GameInvite
+        {
+            SenderId = currentPlayerId,
+            ReceiverId = receiver.PlayerId,
+            RoomId = request.RoomId,
+            Status = "Pending",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.GameInvites.Add(invite);
+        _context.SaveChanges();
+
+        return Ok(new { Message = $"Bạn đã gửi lời mời chơi đến {request.FriendUsername}!", InviteId = invite.Id });
     }
 
-    //InviteFriend
-    [HttpPost("InviteFriend")]
-    public IActionResult InviteFriend([FromBody] AddFriend request)
+    [Authorize]
+    [HttpGet("get-game-invites")]
+    public IActionResult GetGameInvites()
     {
-        if (request == null || string.IsNullOrEmpty(request.FriendUsername))
-        {
-            return BadRequest("Yêu cầu không hợp lệ: FriendUsername không được để trống.");
-        }
-        Console.WriteLine($"InviteFriend request received for User: {request.FriendUsername}");
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        return Ok(new { Message = $"Bạn đã gửi lời mời chơi đến {request.FriendUsername}!" });
+        var invites = _context.GameInvites
+            .Where(i => i.ReceiverId == currentPlayerId && i.Status == "Pending")
+            .OrderByDescending(i => i.CreatedAt)
+            .ToList();
+
+        var response = invites.Select(i => {
+            var sender = _context.Users.FirstOrDefault(u => u.PlayerId == i.SenderId);
+            return new GameInviteResponse
+            {
+                InviteId = i.Id,
+                SenderUsername = sender?.Username,
+                SenderDisplayName = sender?.DisplayName,
+                RoomId = i.RoomId,
+                Status = i.Status,
+                CreatedAt = i.CreatedAt
+            };
+        });
+
+        return Ok(response);
+    }
+
+    [Authorize]
+    [HttpPost("respond-invite")]
+    public IActionResult RespondToGameInvite([FromBody] RespondInviteRequest request)
+    {
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        var invite = _context.GameInvites.FirstOrDefault(i => i.Id == request.InviteId && i.ReceiverId == currentPlayerId);
+        if (invite == null) return NotFound("Không tìm thấy lời mời.");
+
+        if (request.Status != "Accepted" && request.Status != "Declined")
+            return BadRequest("Trạng thái không hợp lệ.");
+
+        invite.Status = request.Status;
+        _context.SaveChanges();
+
+        string message = request.Status == "Accepted" ? "Bạn đã chấp nhận lời mời." : "Bạn đã từ chối lời mời.";
+        return Ok(new { Message = message, invite.Status, invite.RoomId });
     }
 
     [Authorize]
@@ -243,7 +318,76 @@ public class AuthController : ControllerBase
 
         return Ok(new { Message = $"Bạn đã xóa {request.FriendUsername} khỏi danh sách bạn bè!" });
     }
-    private string GenerateJWTToken(string username, string playerId, string sessionId)
+
+    [Authorize]
+    [HttpGet("get-friends")]
+    public IActionResult GetFriends()
+    {
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        Console.WriteLine($"[GetFriends] CurrentPlayerId: {currentPlayerId}");
+
+        var friendships = _context.Friendships
+            .Where(f => f.PlayerId1 == currentPlayerId || f.PlayerId2 == currentPlayerId)
+            .ToList();
+
+        var friends = new List<FriendResponse>();
+
+        foreach (var friendship in friendships)
+        {
+            var friendId = friendship.PlayerId1 == currentPlayerId ? friendship.PlayerId2 : friendship.PlayerId1;
+            var friendUser = _context.Users.FirstOrDefault(u => u.PlayerId == friendId);
+            
+            if (friendUser != null)
+            {
+                friends.Add(new FriendResponse
+                {
+                    Username = friendUser.Username,
+                    DisplayName = string.IsNullOrEmpty(friendUser.DisplayName) ? friendUser.Username : friendUser.DisplayName,
+                    Status = "Online",
+                    CharacterType = "default"
+                });
+            }
+        }
+
+        Console.WriteLine($"[GetFriends] Returning {friends.Count} friends.");
+        return Ok(friends);
+    }
+
+    [Authorize]
+    [HttpGet("get-pending-requests")]
+    public IActionResult GetPendingRequests()
+    {
+        var currentPlayerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
+
+        Console.WriteLine($"[GetPendingRequests] CurrentPlayerId: {currentPlayerId}");
+
+        var friendRequests = _context.FriendRequests
+            .Where(f => f.ReceiverId == currentPlayerId && f.Status == "Pending")
+            .ToList();
+
+        var requests = new List<FriendRequestResponse>();
+
+        foreach (var fr in friendRequests)
+        {
+            var senderUser = _context.Users.FirstOrDefault(u => u.PlayerId == fr.SenderId);
+            if (senderUser != null)
+            {
+                requests.Add(new FriendRequestResponse
+                {
+                    SenderUsername = senderUser.Username,
+                    SenderDisplayName = string.IsNullOrEmpty(senderUser.DisplayName) ? senderUser.Username : senderUser.DisplayName,
+                    CharacterType = "default"
+                });
+            }
+        }
+
+        Console.WriteLine($"[GetPendingRequests] Returning {requests.Count} requests.");
+        return Ok(requests);
+    }
+    private static string GenerateJWTToken(string username, string playerId, string sessionId)
     {
         var SecretKey = "definitely-a-very-secure-secret-key";
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
@@ -267,17 +411,15 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private string HashPassword(string password)
+    private static string HashPassword(string password)
     {
-        using (var sha256 = SHA256.Create())
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
+
+        var builder = new StringBuilder();
+        foreach (var b in bytes)
         {
-            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            var builder = new StringBuilder();
-            foreach (var b in bytes)
-            {
-                builder.Append(b.ToString("x2"));
-            }
-            return builder.ToString();
+            builder.Append(b.ToString("x2"));
         }
+        return builder.ToString();
     }
 }

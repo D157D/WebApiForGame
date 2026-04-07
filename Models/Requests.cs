@@ -36,4 +36,41 @@ namespace Crazy_Lobby.Models
         public string Username { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
     }
+
+    public class GameInviteRequest
+    {
+        public string? FriendUsername { get; set; }
+        public string? RoomId { get; set; }
+    }
+
+    public class RespondInviteRequest
+    {
+        public int InviteId { get; set; }
+        public string? Status { get; set; } // "Accepted" or "Declined"
+    }
+
+    public class GameInviteResponse
+    {
+        public int InviteId { get; set; }
+        public string? SenderUsername { get; set; }
+        public string? SenderDisplayName { get; set; }
+        public string? RoomId { get; set; }
+        public string? Status { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class FriendResponse
+    {
+        public string Username { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Status { get; set; } = "Online";
+        public string CharacterType { get; set; } = "default";
+    }
+
+    public class FriendRequestResponse
+    {
+        public string SenderUsername { get; set; } = string.Empty;
+        public string SenderDisplayName { get; set; } = string.Empty;
+        public string CharacterType { get; set; } = "default";
+    }
 }
