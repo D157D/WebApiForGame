@@ -76,4 +76,34 @@ public class UserController : ControllerBase
 
         return Ok(new { Message = "Đổi tên hiển thị thành công!", DisplayName = user.DisplayName });
     }
+
+    /// <summary>
+    /// Tìm kiếm user theo Tên đăng nhập.
+    /// GET /api/User/search?query=...
+    /// </summary>
+    [HttpGet("search")]
+    public IActionResult SearchUsers([FromQuery] string query)
+    {
+        var playerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(playerId)) return Unauthorized("Token không hợp lệ.");
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return Ok(new List<FriendResponse>());
+        }
+
+        var users = _context.Users
+            .Where(u => u.PlayerId != playerId && u.Username.Contains(query))
+            .Take(20)
+            .Select(u => new FriendResponse
+            {
+                Username = u.Username,
+                DisplayName = string.IsNullOrEmpty(u.DisplayName) ? u.Username : u.DisplayName,
+                Status = "Online", // Tạm thời để online
+                CharacterType = "default"
+            })
+            .ToList();
+
+        return Ok(users);
+    }
 }

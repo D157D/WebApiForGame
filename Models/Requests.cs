@@ -6,6 +6,11 @@ namespace Crazy_Lobby.Models
         public int MaxPlayers { get; set; }
     }
 
+    public class CreateRoomResponse
+    {
+        public string? RoomId { get; set; }
+    }
+
     public class LoginRequest
     {
         public string? Username { get; set; }
@@ -22,6 +27,15 @@ namespace Crazy_Lobby.Models
         public string? PlayerId { get; set; }
         public string? FriendId { get; set; }
         public string? Message { get; set; }
+    }
+
+    public class MatchResultRequest
+    {
+        public string? RoomId { get; set; }
+        public int Score { get; set; }
+        public int MaxCombo { get; set; }
+        public int PerfectHits { get; set; }
+        public int MissHits { get; set; }
     }
 
     // Request đổi tên hiển thị

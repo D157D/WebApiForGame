@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Crazy_Lobby.Services;
 using Crazy_Lobby.AppDataContext;
+using Crazy_Lobby.Models;
 using System.Linq;
+using System.Security.Claims;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -45,5 +47,17 @@ public class MatchController : ControllerBase
             .ToList();
 
         return Ok(playersInRoom);
+    }
+
+    [HttpPost("result")]
+    public IActionResult PostMatchResult([FromBody] MatchResultRequest request)
+    {
+        var playerId = User.FindFirst("PlayerId")?.Value;
+        if (string.IsNullOrEmpty(playerId)) return Unauthorized();
+
+        // Log match result
+        Console.WriteLine($"[MatchResult] Player {playerId} finish room {request.RoomId} | Score: {request.Score} | Combo: {request.MaxCombo}");
+        
+        return Ok(new { Message = "Kết quả trận đấu đã được ghi nhận!" });
     }
 }

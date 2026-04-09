@@ -12,6 +12,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient(); 
+builder.Services.AddSingleton<IRoomService, RoomService>();
 
 // Cấu hình Database với chiến lược Retry (để tránh lỗi khởi động chậm trên Cloud)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
