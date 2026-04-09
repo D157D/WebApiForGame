@@ -93,7 +93,7 @@ public class UserController : ControllerBase
         }
 
         var users = _context.Users
-            .Where(u => u.PlayerId != playerId && u.Username.Contains(query))
+            .Where(u => u.PlayerId != playerId && (u.Username.Contains(query) || (u.DisplayName != null && u.DisplayName.Contains(query))))
             .Take(20)
             .Select(u => new FriendResponse
             {

@@ -101,7 +101,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername || u.DisplayName == request.FriendUsername);
         if (receiver == null) return NotFound("Người dùng không tồn tại.");
         
         if (receiver.PlayerId == currentPlayerId) return BadRequest("Không thể kết bạn với chính mình.");
@@ -149,7 +149,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername || u.DisplayName == request.FriendUsername);
         if (sender == null) return NotFound("Người dùng không tồn tại.");
 
         var friendRequest = _context.FriendRequests.FirstOrDefault(f => 
@@ -170,10 +170,10 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         return Ok(new { Message = $"Bạn đã chấp nhận yêu cầu kết bạn từ {request.FriendUsername}!" });
     }
 
-    //RejectFriend
+    //DeclineFriend
     [Authorize]
-    [HttpPost("reject-friend")]
-    public IActionResult RejectFriend([FromBody] AddFriend request)
+    [HttpPost("decline-friend")]
+    public IActionResult DeclineFriend([FromBody] AddFriend request)
     {
         if (request == null || string.IsNullOrEmpty(request.FriendUsername))
         {
@@ -183,7 +183,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        var sender = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername || u.DisplayName == request.FriendUsername);
         if (sender == null) return NotFound("Người dùng không tồn tại.");
 
         var friendRequest = _context.FriendRequests.FirstOrDefault(f => 
@@ -211,7 +211,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        var receiver = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername || u.DisplayName == request.FriendUsername);
         if (receiver == null) return NotFound("Người dùng không tồn tại.");
 
         if (receiver.PlayerId == currentPlayerId) return BadRequest("Không thể mời chính mình.");
@@ -303,7 +303,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
 
-        var friend = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername);
+        var friend = _context.Users.FirstOrDefault(u => u.Username == request.FriendUsername || u.DisplayName == request.FriendUsername);
         if (friend == null) return NotFound("Người dùng không tồn tại.");
 
         // Tìm Friendship không quan trọng thứ tự Player1 và Player2
@@ -356,8 +356,8 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
     }
 
     [Authorize]
-    [HttpGet("get-pending-requests")]
-    public IActionResult GetPendingRequests()
+    [HttpGet("get-friend-requests")]
+    public IActionResult GetFriendRequests()
     {
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
         if (string.IsNullOrEmpty(currentPlayerId)) return Unauthorized();
@@ -377,8 +377,8 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
             {
                 requests.Add(new FriendRequestResponse
                 {
-                    SenderUsername = senderUser.Username,
-                    SenderDisplayName = string.IsNullOrEmpty(senderUser.DisplayName) ? senderUser.Username : senderUser.DisplayName,
+                    Username = senderUser.Username,
+                    DisplayName = string.IsNullOrEmpty(senderUser.DisplayName) ? senderUser.Username : senderUser.DisplayName,
                     CharacterType = "default"
                 });
             }

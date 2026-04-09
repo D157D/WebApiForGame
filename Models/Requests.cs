@@ -83,8 +83,8 @@ namespace Crazy_Lobby.Models
 
     public class FriendRequestResponse
     {
-        public string SenderUsername { get; set; } = string.Empty;
-        public string SenderDisplayName { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
         public string CharacterType { get; set; } = "default";
     }
 }
