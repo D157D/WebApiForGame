@@ -45,7 +45,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
         _context.SaveChanges();
 
         // Tự động kết bạn với Crazy_Lobby (nếu có)
-        var systemUser = _context.Users.FirstOrDefault(u => u.Username == "Crazy_Lobby");
+        var systemUser = _context.Users.FirstOrDefault(u => u.Username == "khacduy");
         if (systemUser != null && systemUser.PlayerId != newUser.PlayerId)
         {
             _context.Friendships.Add(new Friendship 
@@ -244,7 +244,7 @@ public class AuthController(IHttpClientFactory httpClientFactory, AppDbContext c
     }
 
     [Authorize]
-    [HttpGet("get-game-invites")]
+    [HttpGet("get-invites")]
     public IActionResult GetGameInvites()
     {
         var currentPlayerId = User.FindFirst("PlayerId")?.Value;
