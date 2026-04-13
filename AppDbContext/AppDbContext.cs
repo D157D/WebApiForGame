@@ -13,6 +13,7 @@ namespace Crazy_Lobby.AppDataContext
         public DbSet<Friendship> Friendships { get; set; }
         public DbSet<FriendRequest> FriendRequests { get; set; }
         public DbSet<GameInvite> GameInvites { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; }
         
     }
 }

@@ -87,4 +87,20 @@ namespace Crazy_Lobby.Models
         public string DisplayName { get; set; } = string.Empty;
         public string CharacterType { get; set; } = "default";
     }
+
+    public class SendChatRequest
+    {
+        public string? Message { get; set; }
+        public string? ReceiverUsername { get; set; }
+    }
+
+    public class ChatMessageData
+    {
+        public string? Id { get; set; }
+        public string? SenderUsername { get; set; }
+        public string? SenderDisplayName { get; set; }
+        public string? ReceiverUsername { get; set; }
+        public string? Message { get; set; }
+        public string? SentAt { get; set; }
+    }
 }
