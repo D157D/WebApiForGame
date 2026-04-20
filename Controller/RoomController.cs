@@ -4,26 +4,26 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-[ApiController]
-[Route("api/[controller]")]
-[Authorize]
-#pragma warning disable CA1050
-public class RoomController : ControllerBase
+namespace Crazy_Lobby.Controllers
 {
-    private readonly IRoomService _roomService;
-
-    public RoomController(IRoomService roomService)
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize]
+    public class RoomController : BaseController
     {
-        _roomService = roomService;
-    }
+        private readonly IRoomService _roomService;
+
+        public RoomController(IRoomService roomService)
+        {
+            _roomService = roomService;
+        }
 
     [HttpPost("create")]
     public IActionResult CreateRoom([FromBody] CreateRoomRequest request)
     {
-        var playerId = User.FindFirst("PlayerId")?.Value;
-        if (string.IsNullOrEmpty(playerId)) return Unauthorized();
+        if (string.IsNullOrEmpty(CurrentPlayerId)) return Unauthorized();
 
-        var roomId = _roomService.CreateRoom(request.RoomName ?? "New Room", request.MaxPlayers, playerId);
+        var roomId = _roomService.CreateRoom(request.RoomName ?? "New Room", request.MaxPlayers, CurrentPlayerId);
         return Ok(new CreateRoomResponse { RoomId = roomId });
     }
 
@@ -37,10 +37,9 @@ public class RoomController : ControllerBase
     [HttpPost("join")]
     public IActionResult JoinRoom([FromBody] string roomId)
     {
-        var playerId = User.FindFirst("PlayerId")?.Value;
-        if (string.IsNullOrEmpty(playerId)) return Unauthorized();
+        if (string.IsNullOrEmpty(CurrentPlayerId)) return Unauthorized();
 
-        if (_roomService.JoinRoom(roomId, playerId))
+        if (_roomService.JoinRoom(roomId, CurrentPlayerId))
         {
             return Ok(new { Message = "Joined successfully" });
         }
@@ -50,11 +49,11 @@ public class RoomController : ControllerBase
     [HttpPost("leave")]
     public IActionResult LeaveRoom([FromBody] string roomId)
     {
-        var playerId = User.FindFirst("PlayerId")?.Value;
-        if (string.IsNullOrEmpty(playerId)) return Unauthorized();
+        if (string.IsNullOrEmpty(CurrentPlayerId)) return Unauthorized();
 
-        _roomService.LeaveRoom(roomId, playerId);
+        _roomService.LeaveRoom(roomId, CurrentPlayerId);
         return Ok(new { Message = "Left successfully" });
     }
 }
-#pragma warning restore CA1050
+
+}

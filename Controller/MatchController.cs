@@ -1,50 +1,39 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Crazy_Lobby.Services;
-using Crazy_Lobby.AppDataContext;
 using Crazy_Lobby.Models;
-using System.Linq;
-using System.Security.Claims;
 
-[ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class MatchController : ControllerBase
+namespace Crazy_Lobby.Controllers
 {
-    private readonly IRoomService _roomService;
-    private readonly AppDbContext _dbContext;
-
-    public MatchController(IRoomService roomService, AppDbContext dbContext)
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize]
+    public class MatchController : BaseController
     {
-        _roomService = roomService;
-        _dbContext = dbContext;
-    }
+        private readonly IRoomService _roomService;
+        private readonly IUserService _userService;
+
+        public MatchController(IRoomService roomService, IUserService userService)
+        {
+            _roomService = roomService;
+            _userService = userService;
+        }
 
     [HttpGet("{roomId}/players")]
-    public IActionResult GetPlayersInRoom(string roomId)
+    public async Task<IActionResult> GetPlayersInRoom(string roomId)
     {
         if (string.IsNullOrEmpty(roomId))
         {
             return BadRequest("Mã phòng (roomId) không được để trống.");
         }
 
-        // Lấy danh sách PlayerId đang ở trong phòng từ RoomService
         var playerIds = _roomService.GetPlayerIdsInRoom(roomId);
-        
-        if (playerIds == null || !playerIds.Any())
-        {
-            return NotFound("Phòng không tồn tại hoặc không có người chơi nào.");
-        }
-
-        // Truy vấn Database để mapping PlayerId ra Username
-        var playersInRoom = _dbContext.Users
-            .Where(u => playerIds.Contains(u.PlayerId))
-            .Select(u => new 
-            { 
-                u.PlayerId, 
-                u.Username 
-            })
-            .ToList();
+        var users = await _userService.GetUsersByIdsAsync(playerIds);
+        var playersInRoom = users.Select(u => new 
+        { 
+            u.PlayerId, 
+            u.Username 
+        });
 
         return Ok(playersInRoom);
     }
@@ -52,12 +41,12 @@ public class MatchController : ControllerBase
     [HttpPost("result")]
     public IActionResult PostMatchResult([FromBody] MatchResultRequest request)
     {
-        var playerId = User.FindFirst("PlayerId")?.Value;
-        if (string.IsNullOrEmpty(playerId)) return Unauthorized();
+        if (string.IsNullOrEmpty(CurrentPlayerId)) return Unauthorized();
 
         // Log match result
-        Console.WriteLine($"[MatchResult] Player {playerId} finish room {request.RoomId} | Score: {request.Score} | Combo: {request.MaxCombo}");
+        Console.WriteLine($"[MatchResult] Player {CurrentPlayerId} finish room {request.RoomId} | Score: {request.Score} | Combo: {request.MaxCombo}");
         
         return Ok(new { Message = "Kết quả trận đấu đã được ghi nhận!" });
     }
+}
 }

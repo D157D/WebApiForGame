@@ -13,6 +13,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient(); 
 builder.Services.AddSingleton<IRoomService, RoomService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 // Cấu hình Database với chiến lược Retry (để tránh lỗi khởi động chậm trên Cloud)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -51,10 +53,10 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = "Scrazy_Lobby",
-        ValidAudience = "Client",
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("definitely-a-very-secure-secret-key"))
+            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "default_secret_key_change_me"))
     };
 });
 
